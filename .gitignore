@@ -1,6 +1,3 @@
-# Local dashboard config (contains the Google API key)
-dashboard/config.js
-
 # Editor/OS noise
 .DS_Store
 *.swp
