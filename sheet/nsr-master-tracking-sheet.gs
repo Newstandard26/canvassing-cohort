@@ -27,10 +27,17 @@
 var CFG = {
   fileName: 'NSR Canvasser Ramp — Master Tracking Sheet',
   cohortName: 'Cohort #1 — July 2026',
-  startDate: '2026-08-01',      // Day 1
   rampDays: 45,
   phase1Days: 21,
-  canvassers: ['Alex Rodriguez', 'Bailey Torres', 'Casey Martinez', 'Dakota Lee', 'Emerson Cruz'],
+  // Each rep ramps on their own clock: Day 1 = their startDate, Day 21 gate =
+  // start + 21, Day 45 gate = start + 45. Edit names and dates before running.
+  canvassers: [
+    { name: 'Alex Rodriguez', startDate: '2026-08-01' },
+    { name: 'Bailey Torres', startDate: '2026-08-04' },
+    { name: 'Casey Martinez', startDate: '2026-08-04' },
+    { name: 'Dakota Lee', startDate: '2026-08-11' },
+    { name: 'Emerson Cruz', startDate: '2026-08-18' }
+  ],
   // Compensation / gate constants (mirrored in Settings & Reference tab)
   perLead: 25,
   weeklyDraw: 500,
@@ -75,8 +82,8 @@ function buildMasterTrackingSheet() {
 
   buildCohortOverview(ss);
   buildDailyTracking(ss);
+  buildPhaseGates(ss);      // before Weekly Summary — it holds each rep's start date
   buildWeeklySummary(ss);
-  buildPhaseGates(ss);
   buildRoiProjection(ss);
   buildSettingsReference(ss);
 
@@ -96,21 +103,27 @@ function buildMasterTrackingSheet() {
 
 function buildCohortOverview(ss) {
   var sh = ss.insertSheet('Cohort Overview');
+  // Reps ramp on individual clocks, so cohort dates describe the range:
+  // Start = earliest rep start, gates = that rep's gates. Per-rep dates live
+  // on the Phase Gates tab.
   var headers = [
-    'Cohort Name', 'Start Date', "Today's Date", 'Phase 1 Gate Date', 'Phase 2 Gate Date',
-    'Days Elapsed', 'Days Remaining', 'Total Canvassers Started', 'Phase 1 Currently',
+    'Cohort Name', 'First Start Date', "Today's Date", 'First Phase 1 Gate', 'Last Phase 2 Gate',
+    'Days Elapsed (First Rep)', 'Days Remaining (Last Rep)', 'Total Canvassers Started', 'Phase 1 Currently',
     'Phase 2 Currently', 'Graduated', 'Washed Out', 'Cohort Status',
     'Day 21 Decision', 'Day 21 Decision Date', 'Day 45 Decision', 'Day 45 Decision Date'
   ];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
 
+  var starts = CFG.canvassers.map(function (c) { return c.startDate; }).sort();
+  var firstStart = starts[0], lastStart = starts[starts.length - 1];
+
   sh.getRange('A2').setValue(CFG.cohortName);
-  sh.getRange('B2').setValue(CFG.startDate);
+  sh.getRange('B2').setValue(firstStart);
   sh.getRange('C2').setFormula('=TODAY()');
   sh.getRange('D2').setFormula('=B2+' + CFG.phase1Days);
-  sh.getRange('E2').setFormula('=B2+' + CFG.rampDays);
+  sh.getRange('E2').setValue(lastStart).setFormula('=DATE(' + lastStart.split('-').join(',') + ')+' + CFG.rampDays);
   sh.getRange('F2').setFormula('=MAX(0, MIN(' + CFG.rampDays + ', C2-B2))');
-  sh.getRange('G2').setFormula('=' + CFG.rampDays + '-F2');
+  sh.getRange('G2').setFormula('=MAX(0, E2-C2)');
   sh.getRange('H2').setValue(CFG.canvassers.length);
   sh.getRange('I2').setValue(CFG.canvassers.length);  // all start in Phase 1
   sh.getRange('J2').setValue(0);
@@ -137,19 +150,20 @@ function buildCohortOverview(ss) {
 
 function buildDailyTracking(ss) {
   var sh = ss.insertSheet('Canvasser Daily Tracking');
-  var start = new Date(CFG.startDate + 'T00:00:00');
 
-  CFG.canvassers.forEach(function (name, i) {
+  CFG.canvassers.forEach(function (c, i) {
+    var name = c.name;
+    var start = new Date(c.startDate + 'T00:00:00'); // this rep's own Day 1
     var top = 1 + i * DAILY_BLOCK_ROWS; // first row of this canvasser's block
 
     // Column A labels
     var labels = DAILY_ROW_LABELS.map(function (l) { return [l]; });
     sh.getRange(top, 1, labels.length, 1).setValues(labels);
 
-    // Column B: canvasser name on the block's first row
-    sh.getRange(top, 2).setValue(name + ' (Phase 1)').setFontWeight('bold');
+    // Column B: canvasser name + their start date on the block's first row
+    sh.getRange(top, 2).setValue(name + ' (starts ' + c.startDate + ')').setFontWeight('bold');
 
-    // Date row: Day 1..45 across columns C..AQ
+    // Date row: this rep's Day 1..45 across columns C..AQ
     var dates = [];
     for (var d = 0; d < CFG.rampDays; d++) {
       var dt = new Date(start.getTime());
@@ -214,6 +228,8 @@ function buildWeeklySummary(ss) {
   var weeks = Math.ceil(CFG.rampDays / 7); // 45 days → weeks 1–7 (week 7 is 3 days)
   var row = 2;
 
+  // Week # is each rep's RAMP week (their Week 1 = their first 7 days), so
+  // reps with different start dates stay comparable week-for-week.
   for (var w = 1; w <= weeks; w++) {
     // Day range for this week, as day-column offsets on the Daily Tracking tab
     var firstDay = (w - 1) * 7 + 1;
@@ -221,14 +237,15 @@ function buildWeeklySummary(ss) {
     var c1 = colLetter(DAILY_FIRST_COL + firstDay - 1);
     var c2 = colLetter(DAILY_FIRST_COL + lastDay - 1);
 
-    CFG.canvassers.forEach(function (name, i) {
+    CFG.canvassers.forEach(function (c, i) {
       var top = 1 + i * DAILY_BLOCK_ROWS;
       var doorsRow = top + 2, leadsRow = top + 3, inspRow = top + 5;
+      var gatesStart = "'Phase Gates'!$B$" + (2 + i); // this rep's start date
 
       sh.getRange(row, 1).setValue(w);
-      sh.getRange(row, 2).setFormula("='Cohort Overview'!$B$2+" + ((w - 1) * 7));
-      sh.getRange(row, 3).setFormula("='Cohort Overview'!$B$2+" + (lastDay - 1));
-      sh.getRange(row, 4).setValue(name);
+      sh.getRange(row, 2).setFormula('=' + gatesStart + '+' + ((w - 1) * 7));
+      sh.getRange(row, 3).setFormula('=' + gatesStart + '+' + (lastDay - 1));
+      sh.getRange(row, 4).setValue(c.name);
       sh.getRange(row, 5).setValue(w <= 3 ? 'Phase 1' : 'Phase 2');
       sh.getRange(row, 6).setFormula('=SUM(' + daily + c1 + doorsRow + ':' + c2 + doorsRow + ')');
       sh.getRange(row, 7).setFormula('=SUM(' + daily + c1 + leadsRow + ':' + c2 + leadsRow + ')');
@@ -292,7 +309,7 @@ function buildPhaseGates(ss) {
 
   var doorMinCum = CFG.doorMinDaily * CFG.phase1Days; // 1,260
 
-  CFG.canvassers.forEach(function (name, i) {
+  CFG.canvassers.forEach(function (c, i) {
     var row = 2 + i;
     var top = 1 + i * DAILY_BLOCK_ROWS;
     var daily = "'Canvasser Daily Tracking'!";
@@ -303,8 +320,10 @@ function buildPhaseGates(ss) {
         leadsRow = top + 3, inspRow = top + 5;
     var c1 = colLetter(DAILY_FIRST_COL);
 
-    sh.getRange(row, 1).setValue(name);
-    sh.getRange(row, 2).setFormula("='Cohort Overview'!$B$2");
+    sh.getRange(row, 1).setValue(c.name);
+    // This rep's own start date — the source of truth their gate dates and
+    // Weekly Summary dates derive from.
+    sh.getRange(row, 2).setValue(c.startDate);
     sh.getRange(row, 3).setFormula('=B' + row + '+' + CFG.phase1Days);
     // Phase 1 metrics pulled from Daily Tracking (cumulative through day 21)
     sh.getRange(row, 5).setFormula('=SUM(' + daily + c1 + doorsRow + ':' + d21 + doorsRow + ')');

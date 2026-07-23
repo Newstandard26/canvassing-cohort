@@ -142,7 +142,7 @@ var Charts = (function () {
       var data = weeks.map(function (w) {
         var row = weeklyRows.find(function (r) { return r.name === name && r.week === w; });
         if (!row) return null;
-        var days = daysInWeek(w);
+        var days = daysInWeek(w, name); // per-rep: their own days worked in that ramp week
         return days > 0 ? Math.round(row.doors / days) : null;
       });
       return {
@@ -160,7 +160,7 @@ var Charts = (function () {
 
     make('chart-doors', {
       type: 'line',
-      data: { labels: weeks.map(function (w) { return 'Week ' + w; }), datasets: datasets },
+      data: { labels: weeks.map(function (w) { return 'Ramp Week ' + w; }), datasets: datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,

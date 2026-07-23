@@ -104,6 +104,18 @@ deployment guide), connect the repo to the Vercel project, and push.
 - Manual refresh plus optional 5-minute auto-refresh; responsive layout
   (desktop / tablet / mobile) and a print-friendly view.
 
+## Per-rep ramp clocks
+
+Reps do not share a cohort start date — **each rep runs their own 45-day
+clock** from their individual start date (set per rep in the `CFG.canvassers`
+list before running the Apps Script; also editable later in the Phase Gates
+tab, column B, which is the source of truth). Their daily-tracking date row,
+Weekly Summary dates, and Day 21 / Day 45 gate dates all derive from their own
+start. "Week #" everywhere means *ramp week* (a rep's Week 1 = their first 7
+days), so staggered reps stay comparable week-for-week. The dashboard shows
+per-rep progress bars, a per-rep gate schedule, and gate countdowns sorted
+across all reps.
+
 ## Notes on the numbers
 
 - Weekly earnings = leads × $25 + $500 weekly draw (the 5% GP commission for

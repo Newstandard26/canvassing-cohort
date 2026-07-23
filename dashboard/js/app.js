@@ -39,17 +39,40 @@
   function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
 
   // ---------- derived data ----------
+  // Every rep ramps on their own clock: their Day 1 is their own start date.
 
-  function currentWeek() {
-    var w = 0;
-    state.data.weekly.forEach(function (r) { if (r.week > w) w = r.week; });
-    return w;
+  function todayMidnight() {
+    var t = new Date();
+    t.setHours(0, 0, 0, 0);
+    return t;
   }
 
-  function daysInWeek(w) {
-    var elapsed = state.data.cohort.daysElapsed;
+  /** Per-rep ramp state, derived from their start date on the Phase Gates tab. */
+  function repInfo(name) {
+    var g = state.data.gates.find(function (r) { return r.name === name; }) || {};
+    var start = g.startDate || null;
+    var rampDay = null, daysUntilStart = null;
+    if (start) {
+      var diff = Math.round((todayMidnight() - start) / 86400000);
+      if (diff < 0) daysUntilStart = -diff;
+      else rampDay = Math.min(45, diff + 1); // start date = Day 1
+    }
+    return {
+      start: start,
+      gate1: g.gate1Date || (start ? addDays(start, 21) : null),
+      gate2: g.gate2Date || (start ? addDays(start, 45) : null),
+      rampDay: rampDay,             // null if not started yet
+      daysUntilStart: daysUntilStart,
+      phase: phaseOf(name)
+    };
+  }
+
+  /** Days of ramp week `w` that rep has actually worked (for avg doors/day). */
+  function daysInWeek(w, name) {
+    var info = repInfo(name);
+    var rampDay = info.rampDay || 45; // finished or unknown → full weeks
     var startDay = (w - 1) * 7;
-    return Math.max(1, Math.min(7, 45 - startDay, elapsed - startDay));
+    return Math.max(1, Math.min(7, 45 - startDay, rampDay - startDay));
   }
 
   function canvasserNames() {
@@ -75,12 +98,11 @@
     return 'Phase 1';
   }
 
-  /** One table row per canvasser for the current week (or their last active week). */
+  /** One table row per canvasser: their own latest ramp week with data. */
   function tableRows() {
-    var cw = currentWeek();
     return canvasserNames().map(function (name) {
       var rows = state.data.weekly.filter(function (r) { return r.name === name; });
-      var row = rows.find(function (r) { return r.week === cw; }) || rows[rows.length - 1] || null;
+      var row = rows[rows.length - 1] || null;
       return {
         name: name,
         phase: phaseOf(name),
@@ -106,19 +128,38 @@
     badge.className = 'status-badge ' +
       (c.status === 'ON TRACK' ? 'on-track' : c.status === 'AT RISK' ? 'at-risk' : c.status === 'BEHIND' ? 'behind' : '');
 
-    var elapsed = Math.max(0, Math.min(45, c.daysElapsed));
-    var pctDone = (elapsed / 45) * 100;
-    $('progress-fill').style.width = pctDone + '%';
-    $('progress-marker').style.left = pctDone + '%';
-    $('progress-day-label').textContent = 'Day ' + elapsed + ' of 45';
+    // Per-rep progress bars — each rep ramps on their own 45-day clock
+    var names = canvasserNames();
+    $('rep-progress').innerHTML = names.map(function (name) {
+      var info = repInfo(name);
+      var washed = info.phase === 'Washed Out';
+      var day = info.rampDay || 0;
+      var pct = (day / 45) * 100;
+      var label;
+      if (washed) label = 'Washed out';
+      else if (info.daysUntilStart !== null) label = 'Starts ' + fmtDate(info.start) + ' (in ' + info.daysUntilStart + 'd)';
+      else label = 'Day ' + day + ' of 45';
+      return '<div class="rep-progress-row' + (washed ? ' rep-washed' : '') + '">' +
+        '<span class="rep-progress-name">' + esc(name) + '</span>' +
+        '<div class="progress-track progress-track-sm" aria-hidden="true">' +
+          '<div class="progress-zone zone-p1"></div>' +
+          '<div class="progress-zone zone-p2"></div>' +
+          '<div class="progress-fill" style="width:' + pct + '%"></div>' +
+          (day > 0 && !washed ? '<div class="progress-marker" style="left:' + pct + '%"></div>' : '') +
+        '</div>' +
+        '<span class="rep-progress-label">' + label + '</span>' +
+        '</div>';
+    }).join('');
 
+    // Nearest upcoming gate across active reps
+    var upcoming = gateEvents().filter(function (e) { return e.daysAway >= 0; });
     var countdown = $('gate-countdown');
-    if (elapsed < 21) {
-      countdown.textContent = '⏳ ' + (21 - elapsed) + ' days to the Day 21 Gate (' + fmtDateFull(c.gate1Date) + ')';
-    } else if (elapsed < 45) {
-      countdown.textContent = '⏳ ' + (45 - elapsed) + ' days to the Day 45 Gate (' + fmtDateFull(c.gate2Date) + ')';
+    if (upcoming.length) {
+      var g = upcoming[0];
+      countdown.textContent = '⏳ Next gate: ' + g.name + "'s " + g.label + ' on ' +
+        fmtDateFull(g.date) + (g.daysAway === 0 ? ' (today)' : ' (in ' + g.daysAway + ' days)');
     } else {
-      countdown.textContent = '🏁 Ramp complete — Day 45 gate decisions due.';
+      countdown.textContent = '🏁 All gates have passed — record final decisions.';
     }
 
     $('stat-started').textContent = fmtInt(c.started);
@@ -128,20 +169,49 @@
     $('stat-graduated').textContent = fmtInt(c.graduated);
     $('stat-washed').textContent = fmtInt(c.washedOut);
 
-    // Next action
+    // Next action: overdue gate decisions first, then the nearest gate
+    var overdue = gateEvents().filter(function (e) { return e.daysAway < 0 && !e.decided; });
     var next;
-    if (elapsed >= 21 && !c.day21Decision) {
-      next = '<strong>Next action:</strong> Day 21 gate reached — record ADVANCE / EXTEND / WASHOUT for each canvasser in the Phase Gates tab.';
-    } else if (elapsed < 21) {
-      next = '<strong>Next action:</strong> Continue daily tracking. Day 21 gate review on <strong>' +
-        fmtDateFull(c.gate1Date) + '</strong> (' + (21 - elapsed) + ' days out) — doors ≥1,260 cumulative, conversion ≥4%, quality ≥60%.';
-    } else if (elapsed >= 45 && !c.day45Decision) {
-      next = '<strong>Next action:</strong> Day 45 gate reached — record GRADUATE / EXTEND / WASHOUT decisions and close out the cohort.';
+    if (overdue.length) {
+      next = '<strong>Next action:</strong> ' + esc(overdue[0].name) + "'s " + overdue[0].label +
+        ' passed on ' + fmtDateFull(overdue[0].date) + ' — record the decision in the Phase Gates tab.';
+    } else if (upcoming.length) {
+      var u = upcoming[0];
+      next = '<strong>Next action:</strong> Continue daily tracking. ' + esc(u.name) + "'s " + u.label +
+        ' is on <strong>' + fmtDateFull(u.date) + '</strong>' +
+        (u.daysAway === 0 ? ' (today)' : ' (' + u.daysAway + ' days out)') +
+        (u.label.indexOf('21') >= 0
+          ? ' — doors ≥1,260 cumulative, conversion ≥4%, quality ≥60%.'
+          : ' — sustained metrics plus ≥2 supervised closes.');
     } else {
-      next = '<strong>Next action:</strong> Phase 2 in progress. Day 45 gate on <strong>' +
-        fmtDateFull(c.gate2Date) + '</strong> — sustained metrics plus ≥2 supervised closes.';
+      next = '<strong>Next action:</strong> All ramps complete — close out final decisions and plan the next cohort.';
     }
     $('next-action').innerHTML = next;
+  }
+
+  /** All gate events across active reps, sorted by date. daysAway < 0 = past. */
+  function gateEvents() {
+    var events = [];
+    var today = todayMidnight();
+    canvasserNames().forEach(function (name) {
+      var info = repInfo(name);
+      if (info.phase === 'Washed Out' || !info.start) return;
+      var g = state.data.gates.find(function (r) { return r.name === name; }) || {};
+      [{ date: info.gate1, label: 'Day 21 gate', decided: !!g.phase1Status },
+       { date: info.gate2, label: 'Day 45 gate', decided: !!(g.phase2Status || g.finalDecision) }]
+        .forEach(function (e) {
+          if (!e.date) return;
+          events.push({
+            name: name,
+            label: e.label,
+            date: e.date,
+            decided: e.decided,
+            daysAway: Math.round((e.date - today) / 86400000)
+          });
+        });
+    });
+    events.sort(function (a, b) { return a.date - b.date; });
+    return events;
   }
 
   // ---------- Section 2: Metrics Summary ----------
@@ -175,7 +245,7 @@
       return (av - bv) * dir;
     });
 
-    $('metrics-table-title').textContent = 'Canvasser Metrics — Week ' + currentWeek();
+    $('metrics-table-title').textContent = 'Canvasser Metrics — Latest Ramp Week per Rep';
 
     $('metrics-tbody').innerHTML = rows.map(function (r) {
       return '<tr>' +
@@ -202,22 +272,30 @@
     });
   }
 
+  /** Latest weekly row for each rep still active (their own current ramp week). */
+  function latestRows() {
+    return activeCanvassers().map(function (name) {
+      var rows = state.data.weekly.filter(function (r) { return r.name === name; });
+      return rows[rows.length - 1] || null;
+    }).filter(Boolean);
+  }
+
   function renderCohortSummary() {
-    var cw = currentWeek();
-    var rows = state.data.weekly.filter(function (r) { return r.week === cw; });
+    var rows = latestRows();
     var avg = function (getter) {
       var vals = rows.map(getter).filter(function (v) { return v !== null && v !== undefined; });
       if (!vals.length) return null;
       return vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
     };
-    var days = daysInWeek(cw);
-    var avgDoorsDay = avg(function (r) { return r.doors; });
+    // Avg doors/day: each rep's latest week normalized by the days they worked
+    var perDay = rows.map(function (r) { return r.doors / daysInWeek(r.week, r.name); });
+    var avgDoorsDay = perDay.length ? perDay.reduce(function (a, b) { return a + b; }, 0) / perDay.length : null;
     var counts = { '✓': 0, '⚠️': 0, '✗': 0 };
     rows.forEach(function (r) { if (counts[r.status] !== undefined) counts[r.status]++; });
     var total = rows.length;
 
     $('cohort-summary').innerHTML =
-      '<span class="metric">Avg Doors/Day: <strong>' + (avgDoorsDay === null ? '—' : Math.round(avgDoorsDay / days)) + '</strong></span>' +
+      '<span class="metric">Avg Doors/Day: <strong>' + (avgDoorsDay === null ? '—' : Math.round(avgDoorsDay)) + '</strong></span>' +
       '<span class="metric">Avg Door→Insp: <strong>' + fmtPct(avg(function (r) { return r.conversion; })) + '</strong></span>' +
       '<span class="metric">Avg Lead Quality: <strong>' + fmtPct(avg(function (r) { return r.quality; }), 0) + '</strong></span>' +
       '<span class="metric">On Track: <strong>' + counts['✓'] + '/' + total + '</strong></span>' +
@@ -251,8 +329,7 @@
     var actives = activeCanvassers();
     Charts.doorsTrend(state.data.weekly, actives, daysInWeek);
 
-    var cw = currentWeek();
-    var rows = state.data.weekly.filter(function (r) { return r.week === cw; });
+    var rows = latestRows();
     Charts.conversionBars(rows);
 
     var quals = rows.map(function (r) { return r.quality; }).filter(function (v) { return v !== null; });
@@ -263,68 +340,61 @@
   // ---------- Section 3: Timeline ----------
 
   function renderTimeline() {
-    var c = state.data.cohort;
-    if (!c.startDate) { $('timeline-tbody').innerHTML = ''; return; }
-    var elapsed = c.daysElapsed;
+    // One row per rep — each ramps on their own 45-day clock.
+    var names = canvasserNames();
 
-    var entries = [
-      { d1: 1, d2: 1, label: 'Day 1: Kickoff', cls: 'timeline-row-p1' },
-      { d1: 2, d2: 7, label: 'Week 1: Ramp-up', cls: 'timeline-row-p1' },
-      { d1: 8, d2: 14, label: 'Week 2: Work-ethic Filter', cls: 'timeline-row-p1' },
-      { d1: 15, d2: 21, label: 'Week 3: Phase 1 Wind-up', cls: 'timeline-row-p1' },
-      { d1: 21, d2: 21, label: '🔴 DAY 21 GATE', cls: 'timeline-row-gate', gate: true },
-      { d1: 22, d2: 28, label: 'Week 4: Phase 2 Kickoff', cls: 'timeline-row-p2' },
-      { d1: 29, d2: 35, label: 'Week 5: Closer Ramp', cls: 'timeline-row-p2' },
-      { d1: 36, d2: 42, label: 'Week 6: Close-out Push', cls: 'timeline-row-p2' },
-      { d1: 43, d2: 45, label: 'Days 43–45: Final Evaluations', cls: 'timeline-row-p2' },
-      { d1: 45, d2: 45, label: '🔴 DAY 45 GATE / GRADUATION', cls: 'timeline-row-gate', gate: true }
-    ];
+    $('timeline-tbody').innerHTML = names.map(function (name) {
+      var info = repInfo(name);
+      var g = state.data.gates.find(function (r) { return r.name === name; }) || {};
+      var washed = info.phase === 'Washed Out';
 
-    $('timeline-tbody').innerHTML = entries.map(function (e) {
-      var start = addDays(c.startDate, e.d1 - 1);
-      var end = addDays(c.startDate, e.d2 - 1);
-      // Gate rows display the sheet's own gate dates (=start+21 / =start+45)
-      if (e.gate) start = end = (e.d1 === 21 ? c.gate1Date : c.gate2Date) || start;
-      var range = e.d1 === e.d2 ? fmtDate(start) : fmtDate(start) + ' – ' + fmtDate(end);
-
-      var status;
-      if (e.gate) {
-        var decision = e.d1 === 21 ? c.day21Decision : c.day45Decision;
-        if (decision) status = '✓ Decision: ' + esc(decision);
-        else if (elapsed >= e.d1) status = '⚠️ Decision pending';
-        else status = '⚠️ In ' + (e.d1 - elapsed) + ' days';
-      } else if (elapsed > e.d2) {
-        status = '✓ Complete';
-      } else if (elapsed >= e.d1) {
-        status = '● In Progress (Day ' + (elapsed - e.d1 + 1) + '/' + (e.d2 - e.d1 + 1) + ')';
+      var where, cls;
+      if (washed) {
+        where = '✗ Washed out' + (g.finalNotes ? ' — ' + esc(g.finalNotes) : '');
+        cls = '';
+      } else if (info.daysUntilStart !== null) {
+        where = '□ Starts in ' + info.daysUntilStart + ' day' + (info.daysUntilStart === 1 ? '' : 's');
+        cls = '';
+      } else if (info.phase === 'Graduated') {
+        where = '🎓 Graduated';
+        cls = 'timeline-row-p2';
+      } else if (info.rampDay <= 21) {
+        where = '● Phase 1 — Day ' + info.rampDay + ' of 45';
+        cls = 'timeline-row-p1';
       } else {
-        status = '□ Not Started';
+        where = '● Phase 2 — Day ' + info.rampDay + ' of 45';
+        cls = 'timeline-row-p2';
       }
 
-      var isCurrent = !e.gate && elapsed >= e.d1 && elapsed <= e.d2;
-      return '<tr class="' + e.cls + (isCurrent ? ' timeline-row-current' : '') + '">' +
-        '<td>' + (isCurrent ? '▶ ' : '') + range + '</td>' +
-        '<td>' + e.label + '</td>' +
-        '<td>' + status + '</td>' +
+      var gate1 = washed ? '—' :
+        fmtDate(info.gate1) + (g.phase1Status ? ' · ' + esc(g.phase1Status) :
+          (info.rampDay && info.rampDay >= 21 ? ' · ⚠️ pending' : ''));
+      var gate2 = washed ? '—' :
+        fmtDate(info.gate2) + (g.phase2Status || g.finalDecision ? ' · ' + esc(g.phase2Status || g.finalDecision) :
+          (info.rampDay && info.rampDay >= 45 ? ' · ⚠️ pending' : ''));
+
+      return '<tr class="' + cls + '">' +
+        '<td>' + esc(name) + '</td>' +
+        '<td>' + fmtDate(info.start) + '</td>' +
+        '<td>' + gate1 + '</td>' +
+        '<td>' + gate2 + '</td>' +
+        '<td>' + where + '</td>' +
         '</tr>';
     }).join('');
 
-    // Upcoming events panel
-    var events = [];
-    if (elapsed < 21) {
-      events.push({
-        title: '📅 ' + fmtDateFull(c.gate1Date) + ' (in ' + (21 - elapsed) + ' days) — Day 21 Gate Review',
-        body: 'Criteria: ≥1,260 cumulative doors (60/day), conversion ≥4%, lead quality ≥60%. Decision per canvasser: ADVANCE / EXTEND / WASHOUT.'
-      });
-    }
-    if (elapsed < 45) {
-      events.push({
-        title: '📅 ' + fmtDateFull(c.gate2Date) + ' (in ' + (45 - elapsed) + ' days) — Day 45 Gate / Graduation',
-        body: 'Criteria: sustained 60 doors/day, conversion ≥4%, lead quality ≥60%, plus ≥2 supervised closes. Decision per canvasser: GRADUATE / EXTEND / WASHOUT.'
-      });
-    }
+    // Upcoming events: every undecided gate across reps, soonest first
+    var events = gateEvents().filter(function (e) { return !e.decided; }).map(function (e) {
+      var when = e.daysAway < 0 ? Math.abs(e.daysAway) + ' days ago — decision pending' :
+        e.daysAway === 0 ? 'today' : 'in ' + e.daysAway + ' days';
+      return {
+        title: '📅 ' + fmtDateFull(e.date) + ' (' + when + ') — ' + e.name + "'s " + e.label,
+        body: e.label.indexOf('21') >= 0
+          ? 'Criteria: ≥1,260 cumulative doors (60/day), conversion ≥4%, lead quality ≥60%. Decision: ADVANCE / EXTEND / WASHOUT.'
+          : 'Criteria: sustained 60 doors/day, conversion ≥4%, lead quality ≥60%, plus ≥2 supervised closes. Decision: GRADUATE / EXTEND / WASHOUT.'
+      };
+    });
     if (!events.length) {
-      events.push({ title: '🏁 Ramp complete', body: 'All gates have passed. Close out final decisions in the Phase Gates tab.' });
+      events.push({ title: '🏁 No upcoming gates', body: 'All gate decisions are recorded in the Phase Gates tab.' });
     }
     $('events-panel').innerHTML = events.map(function (ev) {
       return '<details class="event-item"><summary>' + ev.title + '</summary><p>' + ev.body + '</p></details>';

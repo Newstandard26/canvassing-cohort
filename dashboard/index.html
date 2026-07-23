@@ -52,20 +52,11 @@
       </div>
 
       <div class="card timeline-progress-card">
-        <h2>Ramp Progress</h2>
-        <div class="progress-track" aria-hidden="true">
-          <div class="progress-zone zone-p1" title="Phase 1 (Days 1–21)"></div>
-          <div class="progress-zone zone-p2" title="Phase 2 (Days 22–45)"></div>
-          <div id="progress-fill" class="progress-fill"></div>
-          <div id="progress-marker" class="progress-marker"></div>
-          <div class="gate-tick" style="left: 46.7%"><span>Day 21 Gate</span></div>
-          <div class="gate-tick" style="left: 100%"><span>Day 45 Gate</span></div>
-        </div>
-        <div class="progress-labels">
-          <span>Day 1</span>
-          <span id="progress-day-label">Day —</span>
-          <span>Day 45</span>
-        </div>
+        <h2>Ramp Progress — Per Rep</h2>
+        <p class="progress-legend">Each rep runs their own 45-day clock from their start date.
+          <span class="legend-chip legend-p1"></span> Phase 1 (Days 1–21)
+          <span class="legend-chip legend-p2"></span> Phase 2 (Days 22–45)</p>
+        <div id="rep-progress"></div>
         <p id="gate-countdown" class="gate-countdown"></p>
       </div>
 
@@ -151,7 +142,7 @@
           <div class="chart-container"><canvas id="chart-doors" role="img" aria-label="Line chart of average doors per day by week, one line per canvasser, with a 60 doors per day target line"></canvas></div>
         </div>
         <div class="card chart-card">
-          <h2>Door→Inspection % — Current Week</h2>
+          <h2>Door→Inspection % — Latest Ramp Week</h2>
           <div class="chart-container"><canvas id="chart-conversion" role="img" aria-label="Bar chart of door to inspection conversion percentage per canvasser with a 4 percent target line"></canvas></div>
         </div>
         <div class="card chart-card">
@@ -165,11 +156,11 @@
     <!-- ============ Section 3: 45-Day Timeline ============ -->
     <section id="section-timeline" class="section" role="tabpanel" hidden>
       <div class="card">
-        <h2>45-Day Ramp Timeline</h2>
+        <h2>45-Day Ramp Schedule — Per Rep</h2>
         <div class="table-scroll">
           <table class="timeline-table">
             <thead>
-              <tr><th>Date Range</th><th>Milestone</th><th>Status</th></tr>
+              <tr><th>Rep</th><th>Day 1 (Start)</th><th>Day 21 Gate</th><th>Day 45 Gate / Grad</th><th>Where They Are</th></tr>
             </thead>
             <tbody id="timeline-tbody"></tbody>
           </table>
