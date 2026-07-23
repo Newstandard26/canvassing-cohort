@@ -65,14 +65,15 @@ the sheet exists. `config.js` is gitignored so the API key never gets committed.
 
 The dashboard is plain static files — no build step.
 
-- **Vercel (live):** the project `nsr-dashboard` is deployed at
-  **https://nsr-dashboard-seven.vercel.app** (public, no login — runs in demo
-  mode until a `config.js` with real credentials is deployed). The
-  team-scoped URL (`nsr-dashboard-newstandard26s-projects.vercel.app`)
-  requires a Vercel login; share the public alias with the team. The repo's
-  `vercel.json` points Vercel at `dashboard/` as the output directory, so
-  connecting this GitHub repo to the Vercel project enables auto-deploy on
-  push. Note: the deployment guide's `REACT_APP_*` environment variables do
+- **Vercel (live):** this repo is connected to the Vercel project
+  `canvassing-cohort` and auto-deploys on push. Live URL:
+  **https://canvassing-cohort.vercel.app** (public, no login — runs in demo
+  mode until a `config.js` with real credentials is committed). The repo's
+  `vercel.json` pins the deployment to plain static files (no framework, no
+  build) with `dashboard/` as the output directory. There is also an earlier
+  direct deploy at https://nsr-dashboard-seven.vercel.app (project
+  `nsr-dashboard`, not git-connected); it can be deleted in Vercel to avoid
+  confusion. Note: the deployment guide's `REACT_APP_*` environment variables do
   not apply to this vanilla (no-build) dashboard — env vars only exist at
   build time, so configuration lives in `config.js` instead.
 - **GitHub Pages:** serve the `dashboard/` folder (e.g. Settings → Pages →
