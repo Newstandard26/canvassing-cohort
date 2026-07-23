@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40" viewBox="0 0 100 40" role="img" aria-label="New Standard Restoration">
+  <rect x="0" y="0" width="100" height="40" rx="4" fill="#1A3A52"/>
+  <path d="M8 32 L20 12 L32 32 Z" fill="#FF6B35"/>
+  <path d="M20 32 L32 12 L44 32 Z" fill="#FFFFFF" opacity="0.85"/>
+  <text x="52" y="27" font-family="Roboto, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">NSR</text>
+</svg>

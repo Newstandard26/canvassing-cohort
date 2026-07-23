@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NSR Ramp Cohort Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-brand">
+      <img src="nsr-logo.svg" alt="New Standard Restoration logo" class="logo" width="100" height="40">
+      <div>
+        <h1>NEW STANDARD RESTORATION</h1>
+        <p class="subtitle">Ramp Cohort Dashboard</p>
+      </div>
+    </div>
+    <div class="header-meta">
+      <span id="cohort-name" class="cohort-name">—</span>
+      <span id="last-updated" class="last-updated">Last updated: —</span>
+      <div class="header-actions">
+        <button id="refresh-btn" class="btn btn-primary" type="button">↻ Refresh</button>
+        <label class="auto-refresh-toggle">
+          <input type="checkbox" id="auto-refresh-toggle">
+          Auto-refresh (5 min)
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+    <button class="tab active" role="tab" aria-selected="true" data-section="overview">Cohort Overview</button>
+    <button class="tab" role="tab" aria-selected="false" data-section="metrics">Metrics Summary</button>
+    <button class="tab" role="tab" aria-selected="false" data-section="timeline">45-Day Timeline</button>
+    <button class="tab" role="tab" aria-selected="false" data-section="roi">ROI Projection</button>
+  </nav>
+
+  <main id="main">
+
+    <!-- ============ Section 1: Cohort Overview ============ -->
+    <section id="section-overview" class="section active" role="tabpanel">
+      <div class="overview-top">
+        <div class="status-badge-wrap">
+          <span id="status-badge" class="status-badge">—</span>
+        </div>
+        <div id="next-action" class="next-action-box"></div>
+      </div>
+
+      <div class="card timeline-progress-card">
+        <h2>Ramp Progress</h2>
+        <div class="progress-track" aria-hidden="true">
+          <div class="progress-zone zone-p1" title="Phase 1 (Days 1–21)"></div>
+          <div class="progress-zone zone-p2" title="Phase 2 (Days 22–45)"></div>
+          <div id="progress-fill" class="progress-fill"></div>
+          <div id="progress-marker" class="progress-marker"></div>
+          <div class="gate-tick" style="left: 46.7%"><span>Day 21 Gate</span></div>
+          <div class="gate-tick" style="left: 100%"><span>Day 45 Gate</span></div>
+        </div>
+        <div class="progress-labels">
+          <span>Day 1</span>
+          <span id="progress-day-label">Day —</span>
+          <span>Day 45</span>
+        </div>
+        <p id="gate-countdown" class="gate-countdown"></p>
+      </div>
+
+      <div class="status-cards" id="status-cards">
+        <div class="card stat-card">
+          <span class="stat-label">Total Started</span>
+          <span class="stat-value" id="stat-started">—</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">Phase Distribution</span>
+          <span class="stat-value stat-value-sm" id="stat-phases">—</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">Graduated</span>
+          <span class="stat-value stat-green" id="stat-graduated">—</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">Washed Out</span>
+          <span class="stat-value stat-red" id="stat-washed">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Section 2: Metrics Summary ============ -->
+    <section id="section-metrics" class="section" role="tabpanel" hidden>
+      <div class="card">
+        <div class="table-controls">
+          <h2 id="metrics-table-title">Canvasser Metrics — Current Week</h2>
+          <div class="table-filters">
+            <label>Phase
+              <select id="phase-filter">
+                <option value="">All</option>
+                <option value="Phase 1">Phase 1</option>
+                <option value="Phase 2">Phase 2</option>
+                <option value="Graduated">Graduated</option>
+                <option value="Washed Out">Washed Out</option>
+              </select>
+            </label>
+            <input type="search" id="name-search" placeholder="Search canvasser…" aria-label="Search canvasser by name">
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table id="metrics-table">
+            <thead>
+              <tr>
+                <th data-sort="name" aria-sort="none">Canvasser <span class="sort-ind"></span></th>
+                <th data-sort="phase" aria-sort="none">Phase <span class="sort-ind"></span></th>
+                <th data-sort="week" aria-sort="none">Week # <span class="sort-ind"></span></th>
+                <th data-sort="doors" aria-sort="none">Doors/Week <span class="sort-ind"></span></th>
+                <th data-sort="conversion" aria-sort="none">Door→Insp % <span class="sort-ind"></span></th>
+                <th data-sort="quality" aria-sort="none">Lead Quality % <span class="sort-ind"></span></th>
+                <th data-sort="earnings" aria-sort="none">Weekly Earnings <span class="sort-ind"></span></th>
+                <th data-sort="status" aria-sort="none">Status <span class="sort-ind"></span></th>
+              </tr>
+            </thead>
+            <tbody id="metrics-tbody"></tbody>
+          </table>
+        </div>
+        <div id="cohort-summary" class="cohort-summary"></div>
+      </div>
+
+      <div id="detail-view" class="card detail-view" hidden>
+        <div class="detail-head">
+          <h2 id="detail-title">Canvasser Detail</h2>
+          <button id="detail-close" class="btn btn-ghost" type="button">✕ Close</button>
+        </div>
+        <div class="table-scroll">
+          <table id="detail-table">
+            <thead>
+              <tr>
+                <th>Week #</th><th>Dates</th><th>Phase</th><th>Doors</th><th>Leads</th>
+                <th>Conv %</th><th>Inspections</th><th>Quality %</th><th>Earnings</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="detail-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="card chart-card">
+          <h2>Avg Doors/Day by Week</h2>
+          <div class="chart-container"><canvas id="chart-doors" role="img" aria-label="Line chart of average doors per day by week, one line per canvasser, with a 60 doors per day target line"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h2>Door→Inspection % — Current Week</h2>
+          <div class="chart-container"><canvas id="chart-conversion" role="img" aria-label="Bar chart of door to inspection conversion percentage per canvasser with a 4 percent target line"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h2>Cohort Lead Quality</h2>
+          <div class="chart-container"><canvas id="chart-quality" role="img" aria-label="Gauge showing cohort average lead quality percentage against a 60 percent target"></canvas></div>
+          <p id="quality-gauge-label" class="gauge-label"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Section 3: 45-Day Timeline ============ -->
+    <section id="section-timeline" class="section" role="tabpanel" hidden>
+      <div class="card">
+        <h2>45-Day Ramp Timeline</h2>
+        <div class="table-scroll">
+          <table class="timeline-table">
+            <thead>
+              <tr><th>Date Range</th><th>Milestone</th><th>Status</th></tr>
+            </thead>
+            <tbody id="timeline-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <button id="events-toggle" class="collapsible-toggle" type="button" aria-expanded="true">
+          📅 Upcoming Events <span class="chev">▾</span>
+        </button>
+        <div id="events-panel" class="events-panel"></div>
+      </div>
+    </section>
+
+    <!-- ============ Section 4: ROI Projection ============ -->
+    <section id="section-roi" class="section" role="tabpanel" hidden>
+      <div class="status-cards">
+        <div class="card stat-card">
+          <span class="stat-label">Total Training Investment</span>
+          <span class="stat-value stat-orange" id="roi-investment">—</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">Expected Graduates</span>
+          <span class="stat-value stat-green" id="roi-graduates">—</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">Year 1 Contribution</span>
+          <span class="stat-value stat-blue" id="roi-contribution">—</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">ROI</span>
+          <span class="stat-value stat-orange" id="roi-multiple">—</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <button id="assumptions-toggle" class="collapsible-toggle" type="button" aria-expanded="false">
+          Financial Assumptions <span class="chev">▸</span>
+        </button>
+        <div id="assumptions-panel" class="assumptions-panel" hidden></div>
+      </div>
+
+      <div class="card chart-card">
+        <h2>Multi-Year Payoff</h2>
+        <div class="chart-container chart-container-lg"><canvas id="chart-roi" role="img" aria-label="Bar chart of training investment versus net contribution for years one through three"></canvas></div>
+      </div>
+
+      <div class="scenario-cards" id="scenario-cards"></div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>NSR Canvasser Ramp — data refreshes from the Master Tracking Sheet.
+       <span id="data-source-note"></span></p>
+  </footer>
+
+  <!-- Chart.js v4.4.9 vendored locally so the dashboard works offline / behind proxies -->
+  <script src="js/vendor/chart.umd.min.js"></script>
+  <!-- config.js is optional; without it (or if the API is unreachable) the
+       dashboard falls back to built-in demo data. -->
+  <script src="config.js" onerror="void 0"></script>
+  <script src="js/demo-data.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
