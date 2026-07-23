@@ -226,8 +226,14 @@
        <span id="data-source-note"></span></p>
   </footer>
 
-  <!-- Chart.js v4.4.9 vendored locally so the dashboard works offline / behind proxies -->
+  <!-- Chart.js v4.4.9 vendored locally so the dashboard works offline / behind proxies;
+       falls back to the CDN if the vendored copy isn't present (e.g. slim deploys) -->
   <script src="js/vendor/chart.umd.min.js"></script>
+  <script>
+    if (typeof Chart === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"><\/script>');
+    }
+  </script>
   <!-- config.js is optional; without it (or if the API is unreachable) the
        dashboard falls back to built-in demo data. -->
   <script src="config.js" onerror="void 0"></script>
